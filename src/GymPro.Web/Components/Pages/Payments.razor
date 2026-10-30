@@ -1,0 +1,358 @@
+
+@page "/payments"
+@rendermode InteractiveServer
+
+@using GymPro.Web.Models
+@using GymPro.Web.Services
+@using Microsoft.JSInterop
+
+@inject GymApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Payments | GymPro</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">BILLING</span>
+        <h1>Payments</h1>
+        <p>Record member payments and review transaction history.</p>
+    </div>
+
+    <button class="btn btn-orange"
+            @onclick="New"
+            disabled="@(members.Count == 0)">
+        <i class="bi bi-plus-lg me-2"></i>Record payment
+    </button>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")">
+        @message
+    </div>
+}
+
+@if (loading)
+{
+    <p>Loading payments...</p>
+}
+else
+{
+    <div class="panel">
+        <div class="toolbar">
+            <div class="search-box">
+                <i class="bi bi-search"></i>
+                <input placeholder="Search member or payment mode..."
+                       @bind="search"
+                       @bind:event="oninput" />
+            </div>
+
+            <span class="record-count">@items.Count transactions</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th>MEMBER</th>
+                        <th>PAYMENT DATE</th>
+                        <th>MODE</th>
+                        <th>STATUS</th>
+                        <th class="text-end">AMOUNT</th>
+                        <th></th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var p in filtered)
+                    {
+                        <tr>
+                            <td>
+                                <div class="person-cell">
+                                    <span class="person-avatar avatar-green">₹</span>
+                                    <div>
+                                        <strong>
+                                            @(string.IsNullOrWhiteSpace(p.MemberName)
+                                                ? $"Member #{p.MemberId}"
+                                                : p.MemberName)
+                                        </strong>
+                                        <small>Payment #@p.Id</small>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td>@p.PaymentDate.ToString("dd MMM yyyy")</td>
+                            <td>@p.PaymentMode</td>
+
+                            <td>
+                                <span class="pill @(p.PaymentStatus == "Paid" ? "pill-green" : "pill-muted")">
+                                    @p.PaymentStatus
+                                </span>
+                            </td>
+
+                            <td class="text-end fw-semibold">
+                                ₹@p.Amount.ToString("N2")
+                            </td>
+
+                            <td class="text-end">
+                                <button class="icon-btn danger"
+                                        @onclick="() => Remove(p.Id)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+
+                    @if (filtered.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                No payments found.
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (showForm)
+{
+    <div class="modal-backdrop-custom" @onclick="Close">
+        <div class="form-modal" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div>
+                    <span class="eyebrow">NEW TRANSACTION</span>
+                    <h3>Record payment</h3>
+                </div>
+
+                <button class="icon-btn" @onclick="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+
+                <div class="form-grid">
+
+                    <div class="field full">
+                        <label>Member</label>
+
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.MemberId">
+                            <option value="0">Select member</option>
+
+                            @foreach (var m in members)
+                            {
+                                <option value="@m.Id">
+                                    @m.FullName — @m.MobileNumber
+                                </option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div class="field">
+                        <label>Amount (₹)</label>
+                        <InputNumber class="form-control"
+                                     @bind-Value="model.Amount" />
+                        <ValidationMessage For="@(() => model.Amount)" />
+                    </div>
+
+                    <div class="field">
+                        <label>Payment date</label>
+                        <InputDate class="form-control"
+                                   @bind-Value="model.PaymentDate" />
+                    </div>
+
+                    <div class="field">
+                        <label>Payment mode</label>
+
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.PaymentMode">
+                            <option value="UPI">UPI</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Card">Card</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                        </InputSelect>
+                    </div>
+
+                    <div class="field">
+                        <label>Status</label>
+
+                        <InputSelect class="form-select"
+                                     @bind-Value="model.PaymentStatus">
+                            <option value="Paid">Paid</option>
+                            <option value="Pending">Pending</option>
+                        </InputSelect>
+                    </div>
+
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button"
+                            class="btn btn-light"
+                            @onclick="Close">
+                        Cancel
+                    </button>
+
+                    <button type="submit"
+                            class="btn btn-orange"
+                            disabled="@saving">
+                        @(saving ? "Saving..." : "Save payment")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<PaymentVm> items = [];
+    private List<MemberVm> members = [];
+
+    private PaymentVm model = new();
+
+    private string search = "";
+    private string? message;
+
+    private bool isError;
+    private bool showForm;
+    private bool loading;
+    private bool saving;
+
+    private List<PaymentVm> filtered =>
+        items.Where(x =>
+            string.Join(" ",
+                x.MemberName,
+                x.PaymentMode,
+                x.PaymentStatus)
+            .Contains(search, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+
+        try
+        {
+            members = await Api.Get<List<MemberVm>>("api/members") ?? [];
+        }
+        catch
+        {
+            message = "Unable to load members.";
+            isError = true;
+        }
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+
+        try
+        {
+            var raw = await Api.Get<List<PaymentApiVm>>("api/payments") ?? [];
+
+            items = raw.Select(x => new PaymentVm
+            {
+                Id = x.Id,
+                MemberId = x.MemberId,
+                MemberName = x.Member?.FullName,
+                Amount = x.Amount,
+                PaymentDate = x.PaymentDate,
+                PaymentMode = x.PaymentMode,
+                PaymentStatus = x.PaymentStatus
+            }).ToList();
+        }
+        catch
+        {
+            message = "Unable to load payments.";
+            isError = true;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void New()
+    {
+        model = new PaymentVm
+        {
+            PaymentDate = DateTime.Today,
+            PaymentMode = "UPI",
+            PaymentStatus = "Paid"
+        };
+
+        showForm = true;
+        message = null;
+    }
+
+    private void Close()
+    {
+        showForm = false;
+    }
+
+    private async Task Save()
+    {
+        if (model.MemberId <= 0)
+        {
+            message = "Please select a member.";
+            isError = true;
+            return;
+        }
+
+        saving = true;
+
+        try
+        {
+            var result = await Api.Save("api/payments", model);
+
+            message = result.Message;
+            isError = !result.Ok;
+
+            if (result.Ok)
+            {
+                showForm = false;
+                await Load();
+            }
+        }
+        catch
+        {
+            message = "Unable to save payment.";
+            isError = true;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task Remove(int id)
+    {
+        try
+        {
+            bool confirmed = await JS.InvokeAsync<bool>(
+                "confirm",
+                "Are you sure you want to delete this payment?");
+
+            if (!confirmed)
+                return;
+
+            var result = await Api.Delete("api/payments", id);
+
+            message = result.Message;
+            isError = !result.Ok;
+
+            if (result.Ok)
+                await Load();
+        }
+        catch
+        {
+            message = "Unable to delete payment.";
+            isError = true;
+        }
+    }
+}

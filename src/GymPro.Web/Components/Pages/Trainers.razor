@@ -1,0 +1,31 @@
+@page "/trainers"
+@rendermode InteractiveServer
+
+@using Microsoft.JSInterop
+@using GymPro.Web.Models
+@using GymPro.Web.Services
+
+@inject GymApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Trainers | GymPro</PageTitle>
+<div class="page-heading"><div><span class="eyebrow">YOUR COACHING TEAM</span><h1>Trainers</h1><p>Manage trainer profiles and specializations.</p></div><button class="btn btn-orange" @onclick="New"><i class="bi bi-plus-lg me-2"></i>Add trainer</button></div>
+@if (message is not null) { <div class="alert @(isError ? "alert-danger" : "alert-success")">@message</div> }
+<div class="panel"><div class="toolbar"><div class="search-box"><i class="bi bi-search"></i><input placeholder="Search trainers..." @bind="search" @bind:event="oninput" /></div><span class="record-count">@filtered.Count trainers</span></div>
+<div class="table-responsive"><table class="table align-middle"><thead><tr><th>TRAINER</th><th>MOBILE</th><th>SPECIALIZATION</th><th>EXPERIENCE</th><th class="text-end">ACTIONS</th></tr></thead><tbody>
+@foreach (var t in filtered) { <tr><td><div class="person-cell"><span class="person-avatar avatar-blue">@t.TrainerName[..1].ToUpper()</span><div><strong>@t.TrainerName</strong><small>@t.Email</small></div></div></td><td>@t.MobileNumber</td><td>@t.Specialization</td><td>@t.Experience years</td><td class="text-end"><button class="icon-btn" @onclick="() => Edit(t)"><i class="bi bi-pencil"></i></button><button class="icon-btn danger" @onclick="() => Remove(t.Id)"><i class="bi bi-trash"></i></button></td></tr> }
+@if (filtered.Count == 0) { <tr><td colspan="5" class="empty-state">No trainers found.</td></tr> }
+</tbody></table></div></div>
+@if (showForm) { <div class="modal-backdrop-custom" @onclick="Close"><div class="form-modal" @onclick:stopPropagation="true"><div class="modal-head"><div><span class="eyebrow">TRAINER DETAILS</span><h3>@(model.Id == 0 ? "Add trainer" : "Edit trainer")</h3></div><button class="icon-btn" @onclick="Close"><i class="bi bi-x-lg"></i></button></div>
+<EditForm Model="model" OnValidSubmit="Save"><DataAnnotationsValidator /><div class="form-grid">
+<div class="field"><label>Trainer name</label><InputText class="form-control" @bind-Value="model.TrainerName" /></div><div class="field"><label>Email</label><InputText class="form-control" type="email" @bind-Value="model.Email" /></div><div class="field"><label>Mobile</label><InputText class="form-control" @bind-Value="model.MobileNumber" /></div><div class="field"><label>Specialization</label><InputText class="form-control" @bind-Value="model.Specialization" /></div><div class="field"><label>Experience (years)</label><InputNumber class="form-control" @bind-Value="model.Experience" /></div>
+</div><div class="modal-actions"><button type="button" class="btn btn-light" @onclick="Close">Cancel</button><button class="btn btn-orange" type="submit">Save trainer</button></div></EditForm></div></div> }
+@code {
+    private List<TrainerVm> items=[]; private TrainerVm model=new(); private string search=""; private string? message; private bool isError,showForm;
+    private List<TrainerVm> filtered => items.Where(x => string.Join(" ",x.TrainerName,x.Email,x.Specialization).Contains(search,StringComparison.OrdinalIgnoreCase)).ToList();
+    protected override async Task OnInitializedAsync()=>await Load();
+    private async Task Load()=>items=await Api.Get<List<TrainerVm>>("api/trainers")??[];
+    private void New(){model=new();showForm=true;} private void Edit(TrainerVm t){model=new(){Id=t.Id,TrainerName=t.TrainerName,Email=t.Email,MobileNumber=t.MobileNumber,Specialization=t.Specialization,Experience=t.Experience};showForm=true;} private void Close()=>showForm=false;
+    private async Task Save(){var r=await Api.Save("api/trainers",model,model.Id==0?null:model.Id);message=r.Message;isError=!r.Ok;showForm=false;if(r.Ok)await Load();}
+    private async Task Remove(int id){if(!await JS.InvokeAsync<bool>("confirm","Delete this trainer?"))return;var r=await Api.Delete("api/trainers",id);message=r.Message;isError=!r.Ok;if(r.Ok)await Load();}
+}

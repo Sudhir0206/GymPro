@@ -1,0 +1,268 @@
+@page "/memberships"
+@rendermode InteractiveServer
+
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Forms
+@using GymPro.Web.Models
+@using GymPro.Web.Services
+
+@inject GymApiClient Api
+@inject IJSRuntime JS
+
+<PageTitle>Memberships | GymPro</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <span class="eyebrow">PRICING & PLANS</span>
+        <h1>Membership Plans</h1>
+        <p>Create and manage membership plans.</p>
+    </div>
+    <button class="btn btn-orange" @onclick="New">
+        <i class="bi bi-plus-lg me-2"></i>Add Plan
+    </button>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success")">
+        @message
+    </div>
+}
+
+@if (loading)
+{
+    <p>Loading membership plans...</p>
+}
+else
+{
+    <div class="plan-grid">
+        @foreach (var p in items)
+        {
+            <div class="plan-card">
+                <div class="plan-card-top">
+                    <span class="plan-symbol">
+                        <i class="bi bi-award"></i>
+                    </span>
+
+                    <div class="ms-auto">
+                        <button class="icon-btn"
+                                @onclick="() => Edit(p)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+
+                        <button class="icon-btn danger"
+                                @onclick="() => Remove(p.Id)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <h3>@p.PlanName</h3>
+                <p>@p.Description</p>
+
+                <div class="plan-price">
+                    ₹@p.Price.ToString("N0")
+                    <small>/ @p.DurationInMonths month(s)</small>
+                </div>
+
+                <div class="plan-line"></div>
+
+                <div class="plan-duration">
+                    <i class="bi bi-calendar3"></i>
+                    @p.DurationInMonths month duration
+                </div>
+            </div>
+        }
+
+        @if (items.Count == 0)
+        {
+            <div class="panel empty-state">
+                No membership plans available.
+            </div>
+        }
+    </div>
+}
+
+@if (showForm)
+{
+    <div class="modal-backdrop-custom" @onclick="Close">
+        <div class="form-modal" @onclick:stopPropagation="true">
+
+            <div class="modal-head">
+                <div>
+                    <span class="eyebrow">PLAN CONFIGURATION</span>
+                    <h3>@(model.Id == 0 ? "Create Membership Plan" : "Edit Membership Plan")</h3>
+                </div>
+
+                <button class="icon-btn" @onclick="Close">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <EditForm Model="model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Plan Name</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.PlanName" />
+                        <ValidationMessage For="@(() => model.PlanName)" />
+                    </div>
+
+                    <div class="field">
+                        <label>Duration (Months)</label>
+                        <InputNumber class="form-control"
+                                     @bind-Value="model.DurationInMonths" />
+                        <ValidationMessage For="@(() => model.DurationInMonths)" />
+                    </div>
+
+                    <div class="field">
+                        <label>Price (₹)</label>
+                        <InputNumber class="form-control"
+                                     @bind-Value="model.Price" />
+                        <ValidationMessage For="@(() => model.Price)" />
+                    </div>
+
+                    <div class="field full">
+                        <label>Description</label>
+                        <InputText class="form-control"
+                                   @bind-Value="model.Description" />
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button"
+                            class="btn btn-light"
+                            @onclick="Close">
+                        Cancel
+                    </button>
+
+                    <button class="btn btn-orange"
+                            type="submit"
+                            disabled="@saving">
+                        @(saving ? "Saving..." : "Save Plan")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MembershipVm> items = [];
+    private MembershipVm model = new();
+
+    private string? message;
+    private bool isError;
+    private bool showForm;
+    private bool loading;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+
+        try
+        {
+            items = await Api.Get<List<MembershipVm>>(
+                "api/memberships") ?? [];
+        }
+        catch
+        {
+            message = "Unable to load membership plans. Check API connection.";
+            isError = true;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void New()
+    {
+        model = new MembershipVm();
+        showForm = true;
+    }
+
+    private void Edit(MembershipVm p)
+    {
+        model = new MembershipVm
+        {
+            Id = p.Id,
+            PlanName = p.PlanName,
+            DurationInMonths = p.DurationInMonths,
+            Price = p.Price,
+            Description = p.Description
+        };
+
+        showForm = true;
+    }
+
+    private void Close()
+    {
+        showForm = false;
+    }
+
+    private async Task Save()
+    {
+        saving = true;
+
+        try
+        {
+            var result = await Api.Save(
+                "api/memberships",
+                model,
+                model.Id == 0 ? null : model.Id);
+
+            message = result.Message;
+            isError = !result.Ok;
+
+            if (result.Ok)
+            {
+                showForm = false;
+                await Load();
+            }
+        }
+        catch
+        {
+            message = "Something went wrong while saving the plan.";
+            isError = true;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task Remove(int id)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            "Are you sure you want to delete this membership plan?");
+
+        if (!confirmed)
+            return;
+
+        try
+        {
+            var result = await Api.Delete("api/memberships", id);
+
+            message = result.Message;
+            isError = !result.Ok;
+
+            if (result.Ok)
+                await Load();
+        }
+        catch
+        {
+            message = "Unable to delete membership plan.";
+            isError = true;
+        }
+    }
+}

@@ -1,0 +1,12 @@
+<div class="stat-card">
+    <div class="stat-top"><span>@Label</span><span class="stat-icon @Tone"><i class="bi @Icon"></i></span></div>
+    <div class="stat-value">@Value</div>
+    <div class="stat-hint">@Hint</div>
+</div>
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "";
+    [Parameter] public string Tone { get; set; } = "orange";
+    [Parameter] public string Hint { get; set; } = "";
+}

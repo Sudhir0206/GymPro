@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand"><span class="brand-mark"><i class="bi bi-lightning-charge-fill"></i></span> GYMPRO</div>
+        <div class="side-label">WORKSPACE</div>
+        <NavLink href="/" Match="NavLinkMatch.All" class="nav-item"><i class="bi bi-grid-1x2-fill"></i> Dashboard</NavLink>
+        <NavLink href="/members" class="nav-item"><i class="bi bi-people-fill"></i> Members</NavLink>
+        <NavLink href="/trainers" class="nav-item"><i class="bi bi-person-badge-fill"></i> Trainers</NavLink>
+        <NavLink href="/memberships" class="nav-item"><i class="bi bi-card-checklist"></i> Memberships</NavLink>
+        <NavLink href="/payments" class="nav-item"><i class="bi bi-wallet2"></i> Payments</NavLink>
+        <div class="sidebar-footer"><div class="avatar">A</div><div><strong>Administrator</strong><small>Gym manager</small></div></div>
+    </aside>
+    <main class="main-area">
+        <header class="topbar">
+            <div><span class="eyebrow">GYM MANAGEMENT</span><div class="top-title">Workspace</div></div>
+            <div class="top-right"><span class="status-dot"></span><span>System online</span><div class="top-avatar">A</div></div>
+        </header>
+        <section class="page-content">@Body</section>
+        <footer class="footer">GymPro <span>•</span> Simple gym operations dashboard</footer>
+    </main>
+</div>

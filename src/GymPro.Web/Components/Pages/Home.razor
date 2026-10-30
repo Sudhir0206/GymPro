@@ -1,0 +1,55 @@
+@page "/"
+@rendermode InteractiveServer
+@inject GymApiClient Api
+
+<PageTitle>Dashboard | GymPro</PageTitle>
+<div class="page-heading">
+    <div><span class="eyebrow">OVERVIEW</span><h1>Good day, Admin <span class="wave">✦</span></h1><p>Here’s what’s happening at your gym today.</p></div>
+    <a class="btn btn-orange" href="/members"><i class="bi bi-plus-lg me-2"></i>Add member</a>
+</div>
+
+@if (error is not null) { <div class="alert alert-danger">@error</div> }
+@if (data is null) { <div class="loading"><span class="spinner-border spinner-border-sm"></span> Loading dashboard…</div> }
+else
+{
+    <div class="stats-grid">
+        <StatCard Label="Total members" Value="@data.TotalMembers.ToString()" Icon="bi-people-fill" Tone="orange" Hint="Registered members" />
+        <StatCard Label="Active members" Value="@data.ActiveMembers.ToString()" Icon="bi-person-check-fill" Tone="green" Hint="Currently active" />
+        <StatCard Label="Trainers" Value="@data.TotalTrainers.ToString()" Icon="bi-person-badge-fill" Tone="blue" Hint="Coaching team" />
+        <StatCard Label="Membership plans" Value="@data.TotalMemberships.ToString()" Icon="bi-card-checklist" Tone="purple" Hint="Available plans" />
+    </div>
+    <div class="content-grid">
+        <div class="panel">
+            <div class="panel-head"><div><h3>Recent members</h3><p>Latest registrations</p></div><a href="/members">View all <i class="bi bi-arrow-right"></i></a></div>
+            @if (data.RecentMembers.Count == 0) { <div class="empty-state">No members yet. Add your first member to get started.</div> }
+            else
+            {
+                <div class="table-responsive"><table class="table align-middle"><thead><tr><th>MEMBER</th><th>JOINED</th><th>STATUS</th></tr></thead><tbody>
+                @foreach (var m in data.RecentMembers)
+                {
+                    <tr><td><div class="person-cell"><span class="person-avatar">@m.FullName[..1].ToUpper()</span><div><strong>@m.FullName</strong><small>@m.Email</small></div></div></td><td>@m.JoiningDate.ToString("dd MMM yyyy")</td><td><span class="pill @(m.IsActive ? "pill-green" : "pill-muted")">@(m.IsActive ? "Active" : "Inactive")</span></td></tr>
+                }
+                </tbody></table></div>
+            }
+        </div>
+        <div class="panel revenue-panel">
+            <div class="revenue-icon"><i class="bi bi-graph-up-arrow"></i></div>
+            <span class="eyebrow">RECORDED REVENUE</span>
+            <div class="revenue-value">₹@data.TotalRevenue.ToString("N2")</div>
+            <p>Sum of payments marked as Paid</p>
+            <div class="revenue-divider"></div>
+            <div class="revenue-foot"><span>Total payment records</span><strong>@data.TotalPayments</strong></div>
+            <a class="btn btn-outline-light w-100 mt-4" href="/payments">Manage payments <i class="bi bi-arrow-up-right ms-2"></i></a>
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardVm? data;
+    private string? error;
+    protected override async Task OnInitializedAsync()
+    {
+        try { data = await Api.Get<DashboardVm>("api/dashboard/summary"); }
+        catch { error = "Could not load dashboard. Make sure GymPro API is running and ApiBaseUrl is correct."; }
+    }
+}

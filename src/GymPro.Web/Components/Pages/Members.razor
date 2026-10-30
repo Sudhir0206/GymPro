@@ -1,0 +1,74 @@
+@page "/members"
+@using Microsoft.JSInterop
+@rendermode InteractiveServer
+@inject GymApiClient Api
+
+<PageTitle>Members | GymPro</PageTitle>
+<div class="page-heading">
+    <div><span class="eyebrow">GYM DIRECTORY</span><h1>Members</h1><p>Manage your gym members and their details.</p></div>
+    <button class="btn btn-orange" @onclick="New"><i class="bi bi-plus-lg me-2"></i>Add member</button>
+</div>
+@if (message is not null) { <div class="alert @(isError ? "alert-danger" : "alert-success") alert-dismissible">@message <button class="btn-close" @onclick="() => message = null"></button></div> }
+<div class="panel">
+    <div class="toolbar"><div class="search-box"><i class="bi bi-search"></i><input placeholder="Search name, email or mobile..." @bind="search" @bind:event="oninput" /></div><span class="record-count">@filtered.Count members</span></div>
+    <div class="table-responsive"><table class="table align-middle"><thead><tr><th>MEMBER</th><th>MOBILE</th><th>JOINED</th><th>STATUS</th><th class="text-end">ACTIONS</th></tr></thead><tbody>
+    @foreach (var m in filtered)
+    {
+        <tr><td><div class="person-cell"><span class="person-avatar">@m.FullName[..1].ToUpper()</span><div><strong>@m.FullName</strong><small>@m.Email</small></div></div></td><td>@m.MobileNumber</td><td>@m.JoiningDate.ToString("dd MMM yyyy")</td><td><span class="pill @(m.IsActive ? "pill-green" : "pill-muted")">@(m.IsActive ? "Active" : "Inactive")</span></td><td class="text-end"><button class="icon-btn" title="Edit" @onclick="() => Edit(m)"><i class="bi bi-pencil"></i></button><button class="icon-btn danger" title="Delete" @onclick="() => Remove(m.Id)"><i class="bi bi-trash"></i></button></td></tr>
+    }
+    @if (filtered.Count == 0) { <tr><td colspan="5" class="empty-state">No members found.</td></tr> }
+    </tbody></table></div>
+</div>
+
+@if (showForm)
+{
+    <div class="modal-backdrop-custom" @onclick="Close">
+        <div class="form-modal" @onclick:stopPropagation="true">
+            <div class="modal-head"><div><span class="eyebrow">MEMBER DETAILS</span><h3>@(model.Id == 0 ? "Add new member" : "Edit member")</h3></div><button class="icon-btn" @onclick="Close"><i class="bi bi-x-lg"></i></button></div>
+            <EditForm Model="model" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <div class="form-grid">
+                    <div class="field"><label>Full name</label><InputText class="form-control" @bind-Value="model.FullName" /><ValidationMessage For="() => model.FullName" /></div>
+                    <div class="field"><label>Email</label><InputText class="form-control" type="email" @bind-Value="model.Email" /><ValidationMessage For="() => model.Email" /></div>
+                    <div class="field"><label>Mobile number</label><InputText class="form-control" @bind-Value="model.MobileNumber" /></div>
+                    <div class="field"><label>Gender</label><InputSelect class="form-select" @bind-Value="model.Gender"><option>Male</option><option>Female</option><option>Other</option></InputSelect></div>
+                    <div class="field"><label>Age</label><InputNumber class="form-control" @bind-Value="model.Age" /></div>
+                    <div class="field"><label>Joining date</label><InputDate class="form-control" @bind-Value="model.JoiningDate" /></div>
+                    <div class="field full"><label>Address</label><InputText class="form-control" @bind-Value="model.Address" /></div>
+                    <div class="field full"><label class="check-label"><InputCheckbox @bind-Value="model.IsActive" /> Active member</label></div>
+                </div>
+                <div class="modal-actions"><button type="button" class="btn btn-light" @onclick="Close">Cancel</button><button class="btn btn-orange" type="submit" disabled="@saving">@(saving ? "Saving..." : "Save member")</button></div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MemberVm> items = [];
+    private MemberVm model = new();
+    private string search = "";
+    private string? message;
+    private bool isError, showForm, saving;
+    private List<MemberVm> filtered => items.Where(x => string.Join(" ", x.FullName, x.Email, x.MobileNumber).Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync() => await Load();
+    private async Task Load() { items = await Api.Get<List<MemberVm>>("api/members") ?? []; }
+    private void New() { model = new(); showForm = true; }
+    private void Edit(MemberVm item) { model = new MemberVm { Id=item.Id, FullName=item.FullName, Email=item.Email, MobileNumber=item.MobileNumber, Gender=item.Gender, Age=item.Age, Address=item.Address, JoiningDate=item.JoiningDate, IsActive=item.IsActive }; showForm = true; }
+    private void Close() => showForm = false;
+    private async Task Save()
+    {
+        saving = true;
+        var result = await Api.Save("api/members", model, model.Id == 0 ? null : model.Id);
+        saving = false; showForm = false; message = result.Message; isError = !result.Ok;
+        if (result.Ok) await Load();
+    }
+    private async Task Remove(int id)
+    {
+        if (!await JSConfirm("Delete this member? Members with payment history cannot be deleted.")) return;
+        var result = await Api.Delete("api/members", id); message = result.Message; isError = !result.Ok;
+        if (result.Ok) await Load();
+    }
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    private async Task<bool> JSConfirm(string text) => await JS.InvokeAsync<bool>("confirm", text);
+}
